@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinanceJournal AI</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#1a365d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FJournal" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <script src="mermaid.min.js"></script>
+  <script src="vis-network.min.js"></script>
+  <link href="vis-network.min.css" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f7fa;
+      color: #2d3748;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: #1a365d;
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    header h1 { font-size: 1.1rem; font-weight: 600; }
+    .btn-settings {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      border-radius: 7px;
+      padding: 6px 14px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 5px;
+      transition: background 0.2s;
+    }
+    .btn-settings:hover { background: rgba(255,255,255,0.25); }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    .left-panel {
+      width: 300px;
+      min-width: 260px;
+      background: white;
+      border-right: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .journal-input-area { padding: 14px; border-bottom: 1px solid #e2e8f0; }
+    .journal-input-area label {
+      font-size: 0.74rem; color: #718096; font-weight: 700;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      display: block; margin-bottom: 7px;
+    }
+    .textarea-wrapper { position: relative; }
+    .journal-input-area textarea {
+      width: 100%; height: 120px;
+      border: 1.5px solid #e2e8f0; border-radius: 8px;
+      padding: 9px 36px 9px 11px; font-size: 0.88rem;
+      resize: none; outline: none; line-height: 1.6;
+      transition: border-color 0.2s; font-family: inherit;
+    }
+    .journal-input-area textarea:focus { border-color: #4299e1; }
+    .journal-input-area textarea::placeholder { color: #a0aec0; }
+    .journal-input-area textarea.recording { border-color: #e53e3e; background: #fff5f5; }
+
+    .btn-mic {
+      position: absolute; top: 8px; right: 8px;
+      width: 26px; height: 26px; border-radius: 50%;
+      border: none; background: #ebf8ff; color: #2b6cb0;
+      font-size: 0.85rem; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .btn-mic:hover { background: #bee3f8; }
+    .btn-mic.recording {
+      background: #e53e3e; color: white;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    .btn-mic:disabled { opacity: 0.4; cursor: not-allowed; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(229,62,62,0.4); }
+      50%       { box-shadow: 0 0 0 6px rgba(229,62,62,0); }
+    }
+
+    .voice-status {
+      font-size: 0.74rem; color: #e53e3e; margin-top: 4px;
+      min-height: 16px; display: flex; align-items: center; gap: 4px;
+    }
+    .voice-status .dot-blink {
+      width: 6px; height: 6px; border-radius: 50%; background: #e53e3e;
+      animation: blink 0.8s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+    .btn-submit {
+      margin-top: 9px; width: 100%;
+      background: #2b6cb0; color: white;
+      border: none; border-radius: 8px; padding: 9px;
+      font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      transition: background 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-submit:hover:not(:disabled) { background: #2c5282; }
+    .btn-submit:disabled { background: #a0aec0; cursor: not-allowed; }
+
+    .history-area { flex: 1; overflow-y: auto; padding: 12px; }
+    .history-area h3 {
+      font-size: 0.74rem; color: #718096; font-weight: 700;
+      letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 9px;
+    }
+    .history-item {
+      border: 1.5px solid #e2e8f0; border-radius: 8px;
+      padding: 9px 11px; margin-bottom: 7px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .history-item:hover { border-color: #4299e1; background: #ebf8ff; }
+    .history-item.active { border-color: #2b6cb0; background: #ebf8ff; }
+    .history-item .date { font-size: 0.7rem; color: #a0aec0; margin-bottom: 3px; }
+    .history-item .preview { font-size: 0.83rem; color: #4a5568; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-item .tag {
+      display: inline-block; margin-top: 4px;
+      font-size: 0.68rem; background: #bee3f8; color: #2b6cb0;
+      border-radius: 4px; padding: 1px 6px;
+    }
+    .history-empty { font-size: 0.82rem; color: #a0aec0; text-align: center; padding: 20px 0; }
+
+    .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .coach-response { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+    .response-section {
+      background: white; border-radius: 12px; padding: 16px 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .response-section h2 {
+      font-size: 0.82rem; font-weight: 700; color: #2b6cb0;
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 11px; padding-bottom: 8px;
+      border-bottom: 2px solid #ebf8ff;
+    }
+
+    .concept-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+    .concept-tag {
+      background: #ebf8ff; border: 1.5px solid #bee3f8; color: #2b6cb0;
+      border-radius: 20px; padding: 4px 13px; font-size: 0.8rem; font-weight: 500;
+      cursor: pointer; transition: all 0.15s; position: relative;
+    }
+    .concept-tag:hover { background: #bee3f8; }
+    .concept-tag.highlight { background: #2b6cb0; color: white; border-color: #2b6cb0; }
+    .concept-tag.highlight:hover { background: #2c5282; }
+    .concept-tag.active { box-shadow: 0 0 0 3px rgba(66,153,225,0.4); }
+
+    /* 概念ポップアップ */
+    .concept-popup {
+      position: fixed; z-index: 200;
+      background: #1a365d; color: white;
+      border-radius: 10px; padding: 11px 14px;
+      font-size: 0.82rem; line-height: 1.5;
+      max-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      pointer-events: none;
+      opacity: 0; transform: translateY(4px);
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .concept-popup.show { opacity: 1; transform: translateY(0); }
+    .concept-popup strong { display: block; margin-bottom: 4px; font-size: 0.85rem; }
+    .concept-popup::before {
+      content: ''; position: absolute; top: -6px; left: 16px;
+      border: 6px solid transparent;
+      border-bottom-color: #1a365d; border-top: none;
+    }
+    .concept-desc {
+      margin-top: 9px; font-size: 0.87rem; line-height: 1.7; color: #4a5568;
+      background: #f7fafc; border-left: 3px solid #4299e1;
+      padding: 9px 13px; border-radius: 0 6px 6px 0;
+    }
+
+    .diagram-tabs {
+      display: flex; gap: 0; margin-bottom: 12px;
+      border: 1.5px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+      width: fit-content;
+    }
+    .diagram-tab {
+      padding: 6px 16px; font-size: 0.8rem; font-weight: 600;
+      border: none; background: white; color: #718096;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .diagram-tab.active { background: #2b6cb0; color: white; }
+    .diagram-tab:not(:last-child) { border-right: 1.5px solid #e2e8f0; }
+
+    .diagram-view { display: none; }
+    .diagram-view.active { display: block; }
+
+    .flow-area {
+      background: #f7fafc; border-radius: 8px; padding: 14px;
+      overflow-x: auto; display: flex; justify-content: center;
+    }
+
+    #network-container {
+      width: 100%; height: 320px;
+      background: #f7fafc; border-radius: 8px; border: 1px solid #e2e8f0;
+    }
+    .network-legend { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.74rem; color: #718096; }
+    .legend-dot { width: 11px; height: 11px; border-radius: 50%; }
+
+    .suggestions { display: flex; flex-direction: column; gap: 7px; }
+    .suggestion-item {
+      display: flex; align-items: flex-start; gap: 9px;
+      padding: 9px 11px; border: 1.5px solid #e2e8f0;
+      border-radius: 8px; cursor: default; transition: all 0.15s;
+    }
+    .suggestion-item:hover { border-color: #4299e1; background: #ebf8ff; }
+    .suggestion-num {
+      background: #2b6cb0; color: white; width: 20px; height: 20px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    }
+    .suggestion-text { font-size: 0.85rem; line-height: 1.5; color: #2d3748; }
+    .suggestion-text strong { color: #2b6cb0; }
+
+    .progress-row { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+    .progress-label { font-size: 0.8rem; width: 100px; color: #4a5568; flex-shrink: 0; }
+    .progress-bar-bg { flex: 1; height: 7px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+    .progress-bar-fill {
+      height: 100%; background: linear-gradient(90deg, #4299e1, #2b6cb0);
+      border-radius: 4px; transition: width 0.8s ease;
+    }
+    .progress-pct { font-size: 0.75rem; color: #718096; width: 30px; text-align: right; }
+
+    .loading-area {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; gap: 16px; color: #718096;
+    }
+    .spinner-large {
+      width: 40px; height: 40px;
+      border: 3px solid #e2e8f0; border-top-color: #4299e1;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-area p { font-size: 0.9rem; }
+    .loading-dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0%   { content: ''; }
+      25%  { content: '.'; }
+      50%  { content: '..'; }
+      75%  { content: '...'; }
+    }
+
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; color: #a0aec0; gap: 10px;
+    }
+    .empty-state .big-icon { font-size: 2.8rem; }
+    .empty-state p { font-size: 0.88rem; }
+
+    .error-banner {
+      background: #fff5f5; border: 1.5px solid #fed7d7; color: #c53030;
+      border-radius: 10px; padding: 14px 16px; font-size: 0.87rem;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .error-banner .icon { font-size: 1.1rem; flex-shrink: 0; }
+
+    /* 設定モーダル */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 14px; padding: 28px;
+      width: 460px; max-width: 95vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 22px;
+    }
+    .modal-header h2 { font-size: 1rem; font-weight: 700; color: #1a365d; }
+    .modal-close { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #a0aec0; }
+    .modal-close:hover { color: #4a5568; }
+
+    .form-group { margin-bottom: 18px; }
+    .form-group label { font-size: 0.8rem; font-weight: 600; color: #4a5568; display: block; margin-bottom: 6px; }
+    .form-group .hint { font-size: 0.75rem; color: #a0aec0; margin-bottom: 7px; }
+    .form-group input, .form-group select {
+      width: 100%; border: 1.5px solid #e2e8f0; border-radius: 8px;
+      padding: 9px 12px; font-size: 0.88rem; outline: none;
+      transition: border-color 0.2s; font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: #4299e1; }
+
+    .api-key-row { display: flex; gap: 8px; }
+    .api-key-row input { flex: 1; }
+    .btn-toggle-key {
+      background: #f7fafc; border: 1.5px solid #e2e8f0; border-radius: 8px;
+      padding: 0 12px; cursor: pointer; font-size: 0.9rem; color: #718096;
+      transition: all 0.15s;
+    }
+    .btn-toggle-key:hover { background: #ebf8ff; border-color: #4299e1; }
+
+    .api-status { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; margin-top: 6px; }
+    .api-status .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .api-status.ok .dot { background: #48bb78; }
+    .api-status.ng .dot { background: #fc8181; }
+    .api-status.ok { color: #276749; }
+    .api-status.ng { color: #c53030; }
+    .api-status.none { color: #a0aec0; }
+    .api-status.none .dot { background: #cbd5e0; }
+
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+    .btn-cancel {
+      padding: 9px 20px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+      background: white; color: #4a5568; font-size: 0.88rem; cursor: pointer;
+    }
+    .btn-cancel:hover { background: #f7fafc; }
+    .btn-save {
+      padding: 9px 22px; background: #2b6cb0; color: white; border: none;
+      border-radius: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-save:hover { background: #2c5282; }
+    .divider { border: none; border-top: 1px solid #e2e8f0; margin: 18px 0; }
+
+    /* ===== モバイル対応 ===== */
+    @media (max-width: 640px) {
+      header h1 { font-size: 0.95rem; }
+      .btn-settings { padding: 5px 10px; font-size: 0.75rem; }
+
+      .main { flex-direction: column; overflow: auto; }
+
+      .left-panel {
+        width: 100%; min-width: unset;
+        border-right: none; border-bottom: 1px solid #e2e8f0;
+        flex-shrink: 0;
+      }
+      .journal-input-area textarea { height: 100px; }
+      .history-area { max-height: 180px; }
+
+      .right-panel { flex: unset; min-height: 0; }
+      .coach-response { padding: 12px; gap: 12px; overflow: visible; }
+
+      .response-section { padding: 12px 14px; }
+      .response-section h2 { font-size: 0.8rem; }
+
+      .diagram-tab { padding: 5px 12px; font-size: 0.75rem; }
+      #network-container { height: 260px; }
+
+      .modal { padding: 20px; }
+      .modal-header h2 { font-size: 0.95rem; }
+    }
+
+    .no-api-warning {
+      background: #fffbeb; border: 1.5px solid #fbd38d; color: #744210;
+      border-radius: 8px; padding: 10px 14px; font-size: 0.82rem;
+      margin-bottom: 10px; display: none;
+    }
+    .no-api-warning.show { display: block; }
+    .no-api-warning a { color: #2b6cb0; cursor: pointer; text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span>📘</span>
+    <h1>FinanceJournal AI — 金融学習コーチ</h1>
+  </div>
+  <button class="btn-settings" onclick="openSettings()">⚙️ 設定</button>
+</header>
+
+<div class="main">
+  <div class="left-panel">
+    <div class="journal-input-area">
+      <label>今日学んだこと</label>
+      <div class="no-api-warning" id="noApiWarning">
+        APIキーが未設定です。<a onclick="openSettings()">設定</a>から入力してください。
+      </div>
+      <div class="textarea-wrapper">
+        <textarea id="journalInput" placeholder="例：日銀が金利を引き上げるとなぜ株価が下がるのか調べた。金利が上がると企業の借入コストが増えて利益が減るからだと分かった。"></textarea>
+        <button class="btn-mic" id="micBtn" onclick="toggleVoice()" title="音声入力">🎤</button>
+      </div>
+      <div class="voice-status" id="voiceStatus"></div>
+      <button class="btn-submit" id="submitBtn" onclick="submitJournal()">
+        ✨ AIコーチに分析してもらう
+      </button>
+    </div>
+    <div class="history-area">
+      <h3>過去の記録</h3>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="coach-response" id="coachArea">
+      <div class="empty-state">
+        <div class="big-icon">🎓</div>
+        <p>学んだことを入力して送信してください</p>
+        <p style="font-size:0.78rem">AIコーチが概念を解説・図解します</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 概念ポップアップ -->
+<div class="concept-popup" id="conceptPopup">
+  <strong id="popupName"></strong>
+  <span id="popupDesc"></span>
+</div>
+
+<!-- 設定モーダル -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⚙️ 設定</h2>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Anthropic APIキー</label>
+      <div class="hint">claude.ai のAPIキー。sk-ant-... で始まる文字列です。</div>
+      <div class="api-key-row">
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." />
+        <button class="btn-toggle-key" onclick="toggleApiKey()" id="toggleKeyBtn">👁</button>
+      </div>
+      <div class="api-status none" id="apiStatus">
+        <div class="dot"></div>
+        <span id="apiStatusText">APIキーが未設定です</span>
+      </div>
+    </div>
+    <hr class="divider" />
+    <div class="form-group">
+      <label>使用モデル</label>
+      <select id="modelSelect">
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6（推奨・バランス型）</option>
+        <option value="claude-opus-4-7">Claude Opus 4.7（高精度・低速）</option>
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5（高速・軽量）</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeSettings()">キャンセル</button>
+      <button class="btn-save" onclick="saveSettings()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { curve: 'basis' } });
+
+  /* ===== 設定の読み書き ===== */
+  function loadSettings() {
+    return {
+      apiKey: localStorage.getItem('fj_api_key') || '',
+      model: localStorage.getItem('fj_model') || 'claude-sonnet-4-6',
+    };
+  }
+
+  function openSettings() {
+    const s = loadSettings();
+    const input = document.getElementById('apiKeyInput');
+    input.value = s.apiKey;
+    input.type = 'password';
+    document.getElementById('toggleKeyBtn').textContent = '👁';
+    document.getElementById('modelSelect').value = s.model;
+    updateApiStatusDisplay(s.apiKey);
+    document.getElementById('settingsModal').classList.add('show');
+  }
+
+  function closeSettings() {
+    document.getElementById('settingsModal').classList.remove('show');
+  }
+
+  function toggleApiKey() {
+    const input = document.getElementById('apiKeyInput');
+    const btn = document.getElementById('toggleKeyBtn');
+    if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
+    else { input.type = 'password'; btn.textContent = '👁'; }
+  }
+
+  function updateApiStatusDisplay(key) {
+    const status = document.getElementById('apiStatus');
+    const text = document.getElementById('apiStatusText');
+    if (!key) {
+      status.className = 'api-status none';
+      text.textContent = 'APIキーが未設定です';
+    } else if (key.startsWith('sk-ant-')) {
+      status.className = 'api-status ok';
+      text.textContent = 'APIキーが設定されています';
+    } else {
+      status.className = 'api-status ng';
+      text.textContent = 'APIキーの形式が正しくありません（sk-ant- で始まる必要があります）';
+    }
+  }
+
+  document.getElementById('apiKeyInput').addEventListener('input', (e) => {
+    updateApiStatusDisplay(e.target.value.trim());
+  });
+
+  function saveSettings() {
+    const key = document.getElementById('apiKeyInput').value.trim();
+    const model = document.getElementById('modelSelect').value;
+    localStorage.setItem('fj_api_key', key);
+    localStorage.setItem('fj_model', model);
+    checkApiKeyWarning();
+    closeSettings();
+  }
+
+  function checkApiKeyWarning() {
+    const { apiKey } = loadSettings();
+    const w = document.getElementById('noApiWarning');
+    w.classList.toggle('show', !apiKey);
+  }
+
+  /* ===== 履歴 ===== */
+  let currentEntryId = null;
+
+  async function loadHistory() {
+    const res = await fetch('/api/entries');
+    const entries = await res.json();
+    const list = document.getElementById('historyList');
+    if (!entries.length) {
+      list.innerHTML = '<div class="history-empty">まだ記録がありません</div>';
+      return;
+    }
+    list.innerHTML = entries.map(e => `
+      <div class="history-item ${e.id === currentEntryId ? 'active' : ''}" onclick="loadEntry(${e.id}, this)">
+        <div class="date">${e.date}</div>
+        <div class="preview">${escapeHtml(e.text)}</div>
+        ${e.tag ? `<span class="tag">${escapeHtml(e.tag)}</span>` : ''}
+      </div>
+    `).join('');
+  }
+
+  async function loadEntry(id, el) {
+    document.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+    currentEntryId = id;
+    const res = await fetch(`/api/entries/${id}`);
+    const data = await res.json();
+    await renderResponse(data.result, data.date);
+  }
+
+  /* ===== 送信 ===== */
+  let networkInstance = null;
+
+  async function submitJournal() {
+    const text = document.getElementById('journalInput').value.trim();
+    if (!text) return;
+
+    const { apiKey, model } = loadSettings();
+    if (!apiKey) { openSettings(); return; }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '分析中...';
+
+    document.getElementById('coachArea').innerHTML = `
+      <div class="loading-area">
+        <div class="spinner-large"></div>
+        <p>AIコーチが分析中<span class="loading-dots"></span></p>
+        <p style="font-size:0.78rem;color:#a0aec0">通常10〜20秒かかります</p>
+      </div>`;
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, apiKey, model }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError(data.error || 'エラーが発生しました');
+        return;
+      }
+
+      currentEntryId = null;
+      await renderResponse(data.result, data.date);
+      await loadHistory();
+      document.getElementById('journalInput').value = '';
+    } catch (e) {
+      showError('サーバーとの通信に失敗しました');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '✨ AIコーチに分析してもらう';
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('coachArea').innerHTML = `
+      <div class="error-banner">
+        <span class="icon">⚠️</span>
+        <div>${escapeHtml(msg)}</div>
+      </div>`;
+  }
+
+  /* ===== レスポンス描画 ===== */
+  async function renderResponse(d, date) {
+    const area = document.getElementById('coachArea');
+    const mermaidId = 'md_' + Date.now();
+
+    area.innerHTML = `
+      <div class="response-section">
+        <h2>🔗 関連する金融概念</h2>
+        <div class="concept-tags">
+          ${(d.concepts || []).map(c =>
+            `<span class="concept-tag ${c.highlight ? 'highlight' : ''}"
+              onclick="showConceptPopup(event, '${escapeAttr(c.name)}', '${escapeAttr(c.desc || '')}')"
+            >${escapeHtml(c.name)}</span>`
+          ).join('')}
+        </div>
+        <div class="concept-desc">${escapeHtml(d.description || '')}</div>
+      </div>
+
+      <div class="response-section">
+        <h2>🗺️ 図解</h2>
+        <div class="diagram-tabs">
+          <button class="diagram-tab active" onclick="switchTab('flow', this)">📊 因果フロー</button>
+          <button class="diagram-tab" onclick="switchTab('network', this)">🕸️ 概念ネットワーク</button>
+        </div>
+        <div class="diagram-view active" id="view-flow">
+          <div class="flow-area">
+            <div class="mermaid" id="${mermaidId}">${d.flowDiagram || ''}</div>
+          </div>
+        </div>
+        <div class="diagram-view" id="view-network">
+          <div id="network-container"></div>
+          <div class="network-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#e53e3e"></div>政策・金利</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#3182ce"></div>市場・評価</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#38a169"></div>企業・収益</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#d69e2e"></div>債券</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#d53f8c"></div>株式</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#805ad5"></div>マクロ</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#dd6b20"></div>為替</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="response-section">
+        <h2>🚀 次に学ぶとよいこと</h2>
+        <div class="suggestions">
+          ${(d.suggestions || []).map((s, i) => `
+            <div class="suggestion-item">
+              <div class="suggestion-num">${i + 1}</div>
+              <div class="suggestion-text"><strong>${escapeHtml(s.title)}</strong><br>${escapeHtml(s.desc)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="response-section">
+        <h2>📊 学習カバレッジ</h2>
+        ${(d.progress || []).map(p => `
+          <div class="progress-row">
+            <span class="progress-label">${escapeHtml(p.label)}</span>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${p.pct}%"></div></div>
+            <span class="progress-pct">${p.pct}%</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    try {
+      await mermaid.run({ nodes: [document.getElementById(mermaidId)] });
+    } catch (e) {
+      document.getElementById(mermaidId).textContent = '図の描画に失敗しました';
+    }
+
+    initNetwork(d.networkNodes || [], d.networkEdges || []);
+  }
+
+  function switchTab(tab, btn) {
+    document.querySelectorAll('.diagram-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.diagram-view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-' + tab).classList.add('active');
+    if (tab === 'network' && networkInstance) setTimeout(() => networkInstance.fit(), 50);
+  }
+
+  function initNetwork(nodes, edges) {
+    const groupColors = {
+      policy:    { background: '#fed7d7', border: '#e53e3e', font: '#742a2a' },
+      market:    { background: '#bee3f8', border: '#3182ce', font: '#1a365d' },
+      corp:      { background: '#c6f6d5', border: '#38a169', font: '#1c4532' },
+      valuation: { background: '#bee3f8', border: '#2b6cb0', font: '#1a365d' },
+      bond:      { background: '#fefcbf', border: '#d69e2e', font: '#744210' },
+      stock:     { background: '#fbb6ce', border: '#d53f8c', font: '#702459' },
+      macro:     { background: '#e9d8fd', border: '#805ad5', font: '#44337a' },
+      fx:        { background: '#fbd38d', border: '#dd6b20', font: '#652b19' },
+    };
+    const fallback = { background: '#e2e8f0', border: '#718096', font: '#2d3748' };
+
+    const visNodes = new vis.DataSet(nodes.map(n => {
+      const c = groupColors[n.group] || fallback;
+      return {
+        ...n,
+        color: c,
+        font: { size: 13, color: c.font, face: 'Segoe UI' },
+        shape: n.group === 'stock' ? 'ellipse' : 'box',
+        borderWidth: 2, margin: 8,
+      };
+    }));
+
+    const visEdges = new vis.DataSet(edges.map(e => ({
+      ...e,
+      arrows: 'to',
+      color: { color: '#a0aec0', highlight: '#2b6cb0' },
+      font: { size: 10, color: '#718096', align: 'middle' },
+      smooth: { type: 'curvedCW', roundness: 0.15 },
+    })));
+
+    const container = document.getElementById('network-container');
+    if (!container) return;
+    networkInstance = new vis.Network(container, { nodes: visNodes, edges: visEdges }, {
+      physics: { enabled: true, barnesHut: { gravitationalConstant: -3000, springLength: 120 } },
+      interaction: { hover: true },
+      layout: { improvedLayout: true },
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ===== 概念タグ ポップアップ ===== */
+  let popupTimer = null;
+
+  function showConceptPopup(e, name, desc) {
+    document.querySelectorAll('.concept-tag').forEach(t => t.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+
+    const popup = document.getElementById('conceptPopup');
+    document.getElementById('popupName').textContent = name;
+    document.getElementById('popupDesc').textContent = desc || '再度分析すると説明が表示されます';
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    popup.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
+    popup.style.top = (rect.bottom + 8) + 'px';
+    popup.classList.add('show');
+
+    clearTimeout(popupTimer);
+    popupTimer = setTimeout(hideConceptPopup, 4000);
+  }
+
+  function hideConceptPopup() {
+    document.getElementById('conceptPopup').classList.remove('show');
+    document.querySelectorAll('.concept-tag').forEach(t => t.classList.remove('active'));
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('concept-tag')) hideConceptPopup();
+  });
+
+  function escapeAttr(s) {
+    return String(s || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+  }
+
+  /* ===== 音声入力 ===== */
+  let recognition = null;
+  let isRecording = false;
+
+  function initSpeechRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    const r = new SR();
+    r.lang = 'ja-JP';
+    r.continuous = true;
+    r.interimResults = true;
+
+    let finalText = '';
+
+    r.onstart = () => {
+      isRecording = true;
+      finalText = document.getElementById('journalInput').value;
+      document.getElementById('micBtn').classList.add('recording');
+      document.getElementById('micBtn').textContent = '⏹';
+      document.getElementById('journalInput').classList.add('recording');
+      setVoiceStatus('<div class="dot-blink"></div> 録音中… 話してください');
+    };
+
+    r.onresult = (e) => {
+      let interim = '';
+      let newFinal = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) newFinal += t;
+        else interim += t;
+      }
+      finalText += newFinal;
+      document.getElementById('journalInput').value = finalText + interim;
+    };
+
+    r.onend = () => {
+      isRecording = false;
+      document.getElementById('journalInput').value = finalText;
+      document.getElementById('micBtn').classList.remove('recording');
+      document.getElementById('micBtn').textContent = '🎤';
+      document.getElementById('journalInput').classList.remove('recording');
+      setVoiceStatus('');
+    };
+
+    r.onerror = (e) => {
+      isRecording = false;
+      document.getElementById('micBtn').classList.remove('recording');
+      document.getElementById('micBtn').textContent = '🎤';
+      document.getElementById('journalInput').classList.remove('recording');
+      const msg = e.error === 'not-allowed'
+        ? 'マイクの使用が許可されていません。ブラウザの設定を確認してください。'
+        : `エラー: ${e.error}`;
+      setVoiceStatus(msg, true);
+      setTimeout(() => setVoiceStatus(''), 4000);
+    };
+
+    return r;
+  }
+
+  function toggleVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setVoiceStatus('このブラウザは音声入力に対応していません（Chromeを使用してください）', true);
+      setTimeout(() => setVoiceStatus(''), 4000);
+      return;
+    }
+    if (isRecording) {
+      recognition.stop();
+    } else {
+      recognition = initSpeechRecognition();
+      recognition.start();
+    }
+  }
+
+  function setVoiceStatus(html, isError = false) {
+    const el = document.getElementById('voiceStatus');
+    el.innerHTML = html;
+    el.style.color = isError ? '#c53030' : '#e53e3e';
+  }
+
+  /* ===== Service Worker 登録 ===== */
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+
+  /* ===== 初期化 ===== */
+  checkApiKeyWarning();
+  loadHistory();
+</script>
+</body>
+</html>
