@@ -1,4 +1,4 @@
-const CACHE = 'fj-v1';
+const CACHE = 'fj-v2';
 const STATIC = [
   '/',
   '/manifest.json',

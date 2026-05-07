@@ -341,30 +341,50 @@
 
     /* ===== モバイル対応 ===== */
     @media (max-width: 640px) {
-      body { height: auto; overflow: auto; }
+      html, body {
+        height: auto !important;
+        overflow: auto !important;
+        overflow-x: hidden !important;
+      }
 
       header h1 { font-size: 0.95rem; }
       .btn-settings { padding: 5px 10px; font-size: 0.75rem; }
 
-      .main { flex-direction: column; overflow: visible; height: auto; }
+      .main {
+        flex-direction: column !important;
+        overflow: visible !important;
+        height: auto !important;
+        flex: none !important;
+      }
 
       .left-panel {
-        width: 100%; min-width: unset;
-        border-right: none; border-bottom: 1px solid #e2e8f0;
-        flex-shrink: 0; overflow: visible;
+        width: 100% !important;
+        min-width: unset !important;
+        border-right: none !important;
+        border-bottom: 1px solid #e2e8f0;
+        overflow: visible !important;
+        height: auto !important;
       }
       .journal-input-area textarea { height: 100px; }
       .history-area { max-height: 180px; overflow-y: auto; }
 
-      .right-panel { flex: unset; overflow: visible; height: auto; }
-      .coach-response { padding: 12px; gap: 12px; overflow: visible; height: auto; }
+      .right-panel {
+        flex: none !important;
+        overflow: visible !important;
+        height: auto !important;
+      }
+      .coach-response {
+        padding: 12px;
+        gap: 12px;
+        overflow: visible !important;
+        height: auto !important;
+        flex: none !important;
+      }
 
       .response-section { padding: 12px 14px; }
       .response-section h2 { font-size: 0.8rem; }
-
       .diagram-tab { padding: 5px 12px; font-size: 0.75rem; }
       #network-container { height: 260px; }
-
       .modal { padding: 20px; }
       .modal-header h2 { font-size: 0.95rem; }
     }
